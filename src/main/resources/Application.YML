@@ -36,6 +36,7 @@ springdoc:
     path: /swagger-ui.html
     operations-sorter: alpha
     tags-sorter: alpha
+    packages-to-scan: com.example.liveclass
 
 # Logging configuration to monitor your application queries in Railway logs
 logging:
