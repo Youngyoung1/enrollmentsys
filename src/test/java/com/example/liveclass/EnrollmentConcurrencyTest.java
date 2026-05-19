@@ -1,19 +1,17 @@
 package com.example.liveclass;
 
 import com.example.liveclass.dto.request.EnrollRequest;
-import com.example.liveclass.entity.Class;
-import com.example.liveclass.entity.ClassStatus;
+import com.example.liveclass.entity.CourseStatus;
 import com.example.liveclass.exception.CapacityExceededException;
-import com.example.liveclass.repository.ClassRepository;
+import com.example.liveclass.repository.CourserRepository;
 import com.example.liveclass.repository.EnrollmentRepository;
-import com.example.liveclass.service.EnrollmentService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.TestPropertySource;
-import org.springframework.transaction.annotation.Transactional;
+// import org.springframework.transaction.annotation.Transactional; // 이 줄을 제거합니다.
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -30,7 +28,7 @@ import static org.assertj.core.api.Assertions.*;
  */
 @SpringBootTest(classes = EnrollmentSystemApplication.class)
 @TestPropertySource(properties = "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect")
-@Transactional
+// @Transactional // 이 어노테이션을 제거합니다.
 @DisplayName("동시성 제어 테스트")
 public class EnrollmentConcurrencyTest {
 
@@ -38,7 +36,7 @@ public class EnrollmentConcurrencyTest {
     private EnrollmentService enrollmentService;
 
     @Autowired
-    private ClassRepository classRepository;
+    private CourserRepository courserRepository;
 
     @Autowired
     private EnrollmentRepository enrollmentRepository;
@@ -48,6 +46,10 @@ public class EnrollmentConcurrencyTest {
 
     @BeforeEach
     void setUp() {
+        // 테스트 시작 전 DB를 클린업 (선택 사항이지만, @Transactional 제거 시 필요할 수 있음)
+        enrollmentRepository.deleteAll();
+        courserRepository.deleteAll();
+
         // 정원 1명인 강의 생성
         Class course = Class.builder()
                 .id(UUID.randomUUID().toString())
@@ -57,12 +59,12 @@ public class EnrollmentConcurrencyTest {
                 .price(50000)
                 .maxCapacity(1)  // 정원 1명
                 .currentEnrollment(0)
-                .status(ClassStatus.OPEN)
+                .status(CourseStatus.OPEN)
                 .startDate(LocalDateTime.now().plusDays(1))
                 .endDate(LocalDateTime.now().plusDays(30))
                 .build();
 
-        Class saved = classRepository.save(course);
+        Class saved = courserRepository.save(course);
         courseId = saved.getId();
         creatorId = saved.getCreatorId();
     }
@@ -111,16 +113,18 @@ public class EnrollmentConcurrencyTest {
         Long totalEnrollments = enrollmentRepository.countByCourseId(courseId);
         assertThat(totalEnrollments).isEqualTo(1);
 
-        Class course = classRepository.findById(courseId).orElseThrow();
-        assertThat(course.getCurrentEnrollment()).isEqualTo(0);
+        Class course = courserRepository.findById(courseId).orElseThrow();
+        // ⭐ 수정됨: enroll 시점에 currentEnrollment가 증가하므로 1이 되어야 합니다.
+        assertThat(course.getCurrentEnrollment()).isEqualTo(1);
     }
 
     @Test
     @DisplayName("정원 10명, 100명 동시 신청 시 10명만 성공")
     void testConcurrentEnrollmentWithCapacityTen() throws InterruptedException {
-        Class course = classRepository.findById(courseId).orElseThrow();
+        // 정원을 10명으로 변경
+        Class course = courserRepository.findById(courseId).orElseThrow();
         course.setMaxCapacity(10);
-        classRepository.save(course);
+        courserRepository.save(course);
 
         int numThreads = 100;
         ExecutorService executor = Executors.newFixedThreadPool(numThreads);
@@ -162,6 +166,10 @@ public class EnrollmentConcurrencyTest {
 
         Long totalEnrollments = enrollmentRepository.countByCourseId(courseId);
         assertThat(totalEnrollments).isEqualTo(10);
+
+        Class courseAfter = courserRepository.findById(courseId).orElseThrow();
+        // ⭐ 추가됨: enroll 시점에 currentEnrollment가 증가하므로 10이 되어야 합니다.
+        assertThat(courseAfter.getCurrentEnrollment()).isEqualTo(10);
     }
 
     @Test

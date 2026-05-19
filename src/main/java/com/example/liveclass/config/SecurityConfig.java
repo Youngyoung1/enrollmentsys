@@ -7,16 +7,17 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
-@EnableWebSecurity // Spring Security 활성화를 위한 어노테이션
+@EnableWebSecurity
 public class SecurityConfig {
 
     @Bean
-    SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            .csrf(csrf -> csrf.disable()) // 람다 표현식으로 변경 (Spring Security 6.x 이상 권장)
-            .authorizeHttpRequests(auth -> auth
-                .anyRequest().permitAll() // 모든 요청 허용
-            );
-        return http.build(); // HttpSecurity 객체를 빌드하여 반환
+                .authorizeHttpRequests(authz -> authz.anyRequest().permitAll())
+                .csrf(csrf -> csrf.disable())
+                // Configure frame options for H2 console
+                .headers(headers -> headers.frameOptions(frameOptions -> frameOptions.sameOrigin())); // Modern way to configure frameOptions
+
+        return http.build();
     }
 }

@@ -6,6 +6,10 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.Getter;
+import lombok.Setter;
+import org.springframework.format.annotation.DateTimeFormat;
+import com.fasterxml.jackson.annotation.JsonFormat;
 
 import java.time.LocalDateTime;
 
@@ -16,15 +20,18 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Getter
+@Setter
 @Schema(description = "강의 생성 요청")
 public class CreateCourseRequest {
 
     @NotBlank(message = "제목은 필수입니다")
-    @Schema(description = "강의 제목", example = "Spring Boot 실전 마스터", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Size(min = 1, max = 255, message = "제목은 1자 이상 255자 이하여야 합니다")
+    @Schema(description = "강의 제목", example = "liveclass채용과제", requiredMode = Schema.RequiredMode.REQUIRED)
     private String title;
 
     @NotBlank(message = "설명은 필수입니다")
-    @Schema(description = "강의 설명", example = "REST API 개발을 배우는 실전 강좌입니다", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "강의 설명", example = "BE-A", requiredMode = Schema.RequiredMode.REQUIRED)
     private String description;
 
     @NotNull(message = "가격은 필수입니다")
@@ -39,12 +46,28 @@ public class CreateCourseRequest {
     private Integer maxCapacity;
 
     @NotNull(message = "강의 시작일은 필수입니다")
+    @DateTimeFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     @FutureOrPresent(message = "강의 시작일은 현재 또는 미래 날짜여야 합니다")
-    @Schema(description = "강의 시작일시 (ISO 8601 형식)", example = "2025-06-01T10:00:00", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "강의 시작일시 (yyyy-MM-dd'T'HH:mm:ss 형식, Z 형식 제거)",
+            example = "2026-06-01T10:00:00",
+            type = "string",
+            format = "date-time",
+            requiredMode = Schema.RequiredMode.REQUIRED
+    )
     private LocalDateTime startDate;
 
     @NotNull(message = "강의 종료일은 필수입니다")
+    @DateTimeFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     @FutureOrPresent(message = "강의 종료일은 현재 또는 미래 날짜여야 합니다")
-    @Schema(description = "강의 종료일시 (ISO 8601 형식)", example = "2025-07-01T10:00:00", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "강의 종료일시 (yyyy-MM-dd'T'HH:mm:ss 형식, Z 형식 제거)",
+            example = "2026-07-01T10:00:00",
+            type = "string",
+            format = "date-time",
+            requiredMode = Schema.RequiredMode.REQUIRED
+    )
     private LocalDateTime endDate;
 }

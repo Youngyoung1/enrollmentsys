@@ -9,14 +9,14 @@ import lombok.Getter;
  * CLOSED: 모집 마감 (신청 불가)
  */
 @Getter
-public enum ClassStatus {
+public enum CourseStatus {
     DRAFT("초안"),
     OPEN("모집중"),
     CLOSED("모집마감");
 
     private final String description;
 
-    ClassStatus(String description) {
+    CourseStatus(String description) {
         this.description = description;
     }
 

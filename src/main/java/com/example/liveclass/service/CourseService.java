@@ -6,10 +6,12 @@ import com.example.liveclass.dto.response.PaginatedResponse;
 import com.example.liveclass.entity.Course;
 import com.example.liveclass.entity.Course.CourseStatus;
 import com.example.liveclass.entity.Creator;
+import com.example.liveclass.entity.User;
 import com.example.liveclass.exception.CourseNotFoundException;
 import com.example.liveclass.exception.UnauthorizedException;
 import com.example.liveclass.repository.CourseRepository;
 import com.example.liveclass.repository.CreatorRepository;
+import com.example.liveclass.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -29,11 +31,21 @@ public class CourseService {
 
     private final CourseRepository courseRepository;
     private final CreatorRepository creatorRepository;
+    private final UserRepository userRepository;
 
     /**
-     * 강의 생성
+     * 강의 생성 (Creator만 가능)
      */
     public CourseResponse createCourse(CreateCourseRequest request, String creatorId) {
+        // ✅ User 조회 및 role 검증 (CREATOR만 강의 생성 가능)
+        User user = userRepository.findById(creatorId)
+                .orElseThrow(() -> new UnauthorizedException("사용자를 찾을 수 없습니다: " + creatorId));
+
+        if (!user.getRole().equals(User.UserRole.CREATOR)) {
+            throw new UnauthorizedException("강사만 강의를 생성할 수 있습니다");
+        }
+
+        // Creator 조회
         Creator creator = creatorRepository.findById(creatorId)
                 .orElseThrow(() -> new UnauthorizedException("강사를 찾을 수 없습니다: " + creatorId));
 
@@ -57,9 +69,17 @@ public class CourseService {
     }
 
     /**
-     * 강의 상태 변경
+     * 강의 상태 변경 (Creator만, 본인 강의만)
      */
     public CourseResponse updateCourseStatus(String courseId, CourseStatus status, String creatorId) {
+        // ✅ User 조회 및 role 검증
+        User user = userRepository.findById(creatorId)
+                .orElseThrow(() -> new UnauthorizedException("사용자를 찾을 수 없습니다: " + creatorId));
+
+        if (!user.getRole().equals(User.UserRole.CREATOR)) {
+            throw new UnauthorizedException("강사만 강의 상태를 변경할 수 있습니다");
+        }
+
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new CourseNotFoundException("강의를 찾을 수 없습니다: " + courseId));
 
@@ -112,6 +132,14 @@ public class CourseService {
      * 내 강의 목록 (강사가 만든 강의들)
      */
     public PaginatedResponse<CourseResponse> getMyCourses(String creatorId, Pageable pageable) {
+        // ✅ User 조회 및 role 검증
+        User user = userRepository.findById(creatorId)
+                .orElseThrow(() -> new UnauthorizedException("사용자를 찾을 수 없습니다: " + creatorId));
+
+        if (!user.getRole().equals(User.UserRole.CREATOR)) {
+            throw new UnauthorizedException("강사만 자신의 강의 목록을 조회할 수 있습니다");
+        }
+
         Page<Course> page = courseRepository.findByCreatorId(creatorId, pageable);
 
         return PaginatedResponse.from(

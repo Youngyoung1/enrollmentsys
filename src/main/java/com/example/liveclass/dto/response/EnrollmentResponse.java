@@ -1,9 +1,6 @@
 package com.example.liveclass.dto.response;
 
 import com.example.liveclass.entity.Enrollment;
-import com.example.liveclass.entity.Enrollment.EnrollmentStatus;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,60 +10,36 @@ import java.time.LocalDateTime;
 
 /**
  * 수강 신청 응답 DTO
+ * 신청된 Enrollment의 UUID를 포함하여 반환
  */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@JsonInclude(JsonInclude.Include.NON_NULL)
-@Schema(description = "수강 신청 정보")
 public class EnrollmentResponse {
 
-    @Schema(description = "신청 ID", example = "550e8400-e29b-41d4-a716-446655440000")
-    private String id;
-
-    @Schema(description = "학생 ID", example = "student-1")
-    private String studentId;
-
-    @Schema(description = "강의 ID", example = "550e8400-e29b-41d4-a716-446655440001")
-    private String courseId;
-
-    @Schema(description = "강의 제목", example = "Spring Boot 실전")
-    private String courseTitle;
-
-    @Schema(description = "신청 상태", example = "PENDING")
-    private EnrollmentStatus status;
-
-    @Schema(description = "확정 시간", example = "2026-05-19T02:23:51.541Z")
-    private LocalDateTime confirmedAt;
-
-    @Schema(description = "취소 시간", example = "2026-05-19T02:23:51.541Z")
-    private LocalDateTime cancelledAt;
-
-    @Schema(description = "신청 시간", example = "2026-05-19T02:23:51.541Z")
-    private LocalDateTime enrolledAt;
-
-    @Schema(description = "생성 시간", example = "2026-05-19T02:23:51.541Z")
-    private LocalDateTime createdAt;
-
-    @Schema(description = "수정 시간", example = "2026-05-19T02:23:51.541Z")
-    private LocalDateTime updatedAt;
+    private String enrollmentId;        // ✅ Enrollment UUID (핵심!)
+    private String userId;              // 학생 ID
+    private String courseId;            // 강의 ID
+    private String courseName;          // 강의명 (참고용)
+    private String status;              // 신청 상태 (PENDING, CONFIRMED, CANCELLED)
+    private LocalDateTime enrolledAt;   // 신청 시간
+    private LocalDateTime confirmedAt;  // 결제 확정 시간
+    private LocalDateTime cancelledAt;  // 취소 시간
+    private String message;             // "수강 신청 성공" 등
 
     /**
-     * Entity → Response 변환
+     * Enrollment Entity를 Response로 변환
      */
-    public static EnrollmentResponse from(Enrollment entity) {
+    public static EnrollmentResponse from(Enrollment enrollment) {
         return EnrollmentResponse.builder()
-                .id(entity.getId())
-                .studentId(entity.getStudent().getId())
-                .courseId(entity.getCourse().getId())
-                .courseTitle(entity.getCourse().getTitle())
-                .status(entity.getStatus())
-                .confirmedAt(entity.getConfirmedAt())
-                .cancelledAt(entity.getCancelledAt())
-                .enrolledAt(entity.getEnrolledAt())
-                .createdAt(entity.getCreatedAt())
-                .updatedAt(entity.getUpdatedAt())
+                .enrollmentId(enrollment.getId())  // ✅ UUID 반환
+                .userId(enrollment.getUserId())
+                .courseId(enrollment.getCourseId())
+                .status(enrollment.getStatus().toString())
+                .enrolledAt(enrollment.getEnrolledAt())
+                .confirmedAt(enrollment.getConfirmedAt())
+                .cancelledAt(enrollment.getCancelledAt())
                 .build();
     }
 }

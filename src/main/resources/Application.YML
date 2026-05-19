@@ -2,37 +2,42 @@ spring:
   application:
     name: liveclass
 
-  # JPA Configuration
+  jackson:
+    date-format: yyyy-MM-dd'T'HH:mm:ss
+    time-zone: UTC
+    serialization:
+      write-dates-as-timestamps: false
+
   jpa:
     hibernate:
       ddl-auto: create-drop
-    show-sql: false
+    show-sql: true
     properties:
       hibernate:
         dialect: org.hibernate.dialect.H2Dialect
         format_sql: true
-        jdbc:
-          batch_size: 20
-        order_inserts: true
-        order_updates: true
-        use_sql_comments: true
 
-  # DataSource Configuration (H2)
   datasource:
     url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     username: sa
     password:
     driver-class-name: org.h2.Driver
 
-  # H2 Console
   h2:
     console:
       enabled: true
       path: /h2-console
 
-  # Flyway Configuration (disabled for H2)
-  flyway:
-    enabled: false
+springdoc:
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+    # ✅ Authorize 버튼에서 입력한 값을 요청에 자동 포함
+    persist-authorization: true
+  api-docs:
+    path: /v3/api-docs
 
 server:
   port: 8080
@@ -44,7 +49,6 @@ logging:
     root: INFO
     com.example.liveclass: DEBUG
     org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
 

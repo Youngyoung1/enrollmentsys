@@ -1,17 +1,16 @@
 package com.example.liveclass.config;
 
+import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
-import io.swagger.v3.oas.models.info.Contact;
-import io.swagger.v3.oas.models.info.License;
-import io.swagger.v3.oas.models.servers.Server;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import io.swagger.v3.oas.models.security.SecurityScheme;
+import io.swagger.v3.oas.models.tags.Tag;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/**
- * Swagger/OpenAPI 설정
- * 브라우저에서 http://localhost:8080/swagger-ui.html 접속
- */
+import java.util.List;
+
 @Configuration
 public class SwaggerConfig {
 
@@ -19,29 +18,33 @@ public class SwaggerConfig {
     public OpenAPI customOpenAPI() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("🎓 수강 신청 시스템 API")
+                        .title("LiveClass API")
                         .version("1.0.0")
                         .description("""
-                                온라인 강의 플랫폼의 수강 신청 시스템 API 문서입니다.
+                                ## 사용 순서
+                                1. **Users** - 강사/학생 회원가입 → ID 획득
+                                2. **강의관리** - 강사가 강의 생성/관리
+                                3. **수강신청** - 학생이 강의 신청/확정/취소
                                 
-                                주요 기능:
-                                - 강의 관리 (생성, 상태 변경, 조회)
-                                - 수강 신청 (신청, 확정, 취소)
-                                - 정원 관리 (초과 방지, 동시성 제어)
-                                - 취소 기간 제한 (확정 후 7일)
-                                """)
-                        .contact(new Contact()
-                                .name("라이브클래스")
-                                .url("https://liveclass.com")
-                                .email("support@liveclass.com"))
-                        .license(new License()
-                                .name("Apache 2.0")
-                                .url("https://www.apache.org/licenses/LICENSE-2.0.html")))
-                .addServersItem(new Server()
-                        .url("http://localhost:8080")
-                        .description("로컬 개발 서버"))
-                .addServersItem(new Server()
-                        .url("https://liveclass-production.up.railway.app")
-                        .description("프로덕션 서버"));
+                                ## 인증 방법
+                                우측 상단 🔒 **Authorize** 버튼 → Value에 ID 입력
+                                - 강사: `creator-1`
+                                - 학생: `student-1`
+                                """))
+                .tags(List.of(
+                        new Tag().name("Users").description("👤 사용자 관리"),
+                        new Tag().name("강의관리").description("🎬 강의 관리"),
+                        new Tag().name("수강신청").description("📝 수강 신청")
+                ))
+                .components(new Components()
+                        .addSecuritySchemes("ApiKeyAuth",
+                                new SecurityScheme()
+                                        // ✅ HTTP 타입으로 변경 → Swagger UI가 Authorization 헤더에 직접 주입
+                                        .type(SecurityScheme.Type.HTTP)
+                                        .scheme("bearer")
+                                        .bearerFormat("ID")
+                                        .name("Authorization")
+                                        .description("사용자 ID 입력 (예: creator-1, student-1)")))
+                .addSecurityItem(new SecurityRequirement().addList("ApiKeyAuth"));
     }
 }

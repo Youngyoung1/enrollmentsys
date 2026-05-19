@@ -1,15 +1,14 @@
 package com.example.liveclass.exception;
 
 /**
- * 잘못된 상태 전이가 발생했을 때의 예외
+ * 신청 상태가 올바르지 않을 때 발생하는 예외
  */
-public class InvalidStateException extends ApiException {
+public class InvalidStateException extends RuntimeException {
+    public InvalidStateException(String message) {
+        super(message);
+    }
 
-    public InvalidStateException(String currentState, String targetState) {
-        super(
-                "INVALID_STATE_TRANSITION",
-                "잘못된 상태 전이입니다. " + currentState + " -> " + targetState,
-                400
-        );
+    public InvalidStateException(String message, Throwable cause) {
+        super(message, cause);
     }
 }
