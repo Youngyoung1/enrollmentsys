@@ -2,61 +2,44 @@ spring:
   application:
     name: liveclass
 
-  jackson:
-    date-format: yyyy-MM-dd'T'HH:mm:ss
-    time-zone: UTC
-    serialization:
-      write-dates-as-timestamps: false
+  datasource:
+    # Save database as a file inside the /data directory for Railway Volume persistence
+    url: jdbc:h2:file:/data/liveclassdb;DB_CLOSE_ON_EXIT=FALSE;FILE_LOCK=SOCKET
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: your_secure_password # ⚠️ Change this to a secure password!
 
   jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
-      ddl-auto: create-drop
-    show-sql: true
+      # 'update' ensures your tables are created automatically without deleting existing data on restart
+      ddl-auto: update
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.H2Dialect
+        show_sql: true
         format_sql: true
+        use_sql_comments: true
 
-  datasource:
-    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-    username: sa
-    password:
-    driver-class-name: org.h2.Driver
-
+  # H2 Console configuration for remote access
   h2:
     console:
       enabled: true
       path: /h2-console
+      settings:
+        web-allow-others: true # Allows you to access the console via your Railway public URL
 
+# Springdoc OpenAPI (Swagger UI) Configuration
 springdoc:
-  swagger-ui:
-    enabled: true
-    path: /swagger-ui.html
-    operations-sorter: method
-    tags-sorter: alpha
-    # ✅ Authorize 버튼에서 입력한 값을 요청에 자동 포함
-    persist-authorization: true
   api-docs:
-    path: /v3/api-docs
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: alpha
+    tags-sorter: alpha
 
-server:
-  port: 8080
-  servlet:
-    context-path: /api
-
+# Logging configuration to monitor your application queries in Railway logs
 logging:
   level:
     root: INFO
-    com.example.liveclass: DEBUG
     org.hibernate.SQL: DEBUG
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,metrics
-  endpoint:
-    health:
-      show-details: when-authorized
+    org.hibernate.orm.results: TRACE
