@@ -1,4 +1,4 @@
 package com.example.liveclass.entity;
 
-public class Enrollment {
+public class User {
 }

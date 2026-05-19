@@ -1,175 +1,207 @@
 package com.example.liveclass.service;
 
-import com.example.liveclass.dto.request.EnrollRequest;
 import com.example.liveclass.dto.response.EnrollmentResponse;
 import com.example.liveclass.dto.response.PaginatedResponse;
-import com.example.liveclass.entity.Class;
-import com.example.liveclass.entity.ClassStatus;
+import com.example.liveclass.entity.Course;
 import com.example.liveclass.entity.Enrollment;
-import com.example.liveclass.entity.EnrollmentStatus;
+import com.example.liveclass.entity.Enrollment.EnrollmentStatus;
+import com.example.liveclass.entity.Student;
 import com.example.liveclass.exception.*;
-import com.example.liveclass.repository.ClassRepository;
+import com.example.liveclass.repository.CourseRepository;
 import com.example.liveclass.repository.EnrollmentRepository;
+import com.example.liveclass.repository.StudentRepository;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
-import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 /**
- * 신청 비즈니스 로직 서비스
+ * 수강 신청 서비스
  */
-@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class EnrollmentService {
 
     private final EnrollmentRepository enrollmentRepository;
-    private final ClassRepository classRepository;
+    private final CourseRepository courseRepository;
+    private final StudentRepository studentRepository;
+    private final CourseService courseService;
 
-    private static final long CANCELLATION_DEADLINE_DAYS = 7;  // 7일 제한
+    private static final int CANCELLATION_PERIOD_DAYS = 7;
 
-    public EnrollmentResponse enroll(EnrollRequest request, String userId) {
-        log.info("수강 신청 요청: courseId={}, userId={}", request.getCourseId(), userId);
+    /**
+     * 수강 신청
+     */
+    public EnrollmentResponse enrollCourse(String courseId, String studentId) {
+        Student student = studentRepository.findById(studentId)
+                .orElseThrow(() -> new UnauthorizedException("학생을 찾을 수 없습니다: " + studentId));
 
-        Class course = classRepository.findByIdWithLock(request.getCourseId())
-                .orElseThrow(() -> new CourseNotFoundException(request.getCourseId()));
+        Course course = courseRepository.findByIdWithLock(courseId)
+                .orElseThrow(() -> new CourseNotFoundException("강의를 찾을 수 없습니다: " + courseId));
 
-        if (course.getStatus() != ClassStatus.OPEN) {
-            throw new CourseNotOpenException(course.getId(), course.getStatus().toString());
+        // 강의 상태 확인
+        if (!course.getStatus().name().equals("OPEN")) {
+            throw new CourseNotOpenException("강의가 공개 중이 아닙니다");
         }
 
-        if (course.isCapacityFull()) {
-            throw new CapacityExceededException(course.getId());
+        // 정원 확인
+        if (course.getCurrentEnrollment() >= course.getMaxCapacity()) {
+            throw new CapacityExceededException("강의 정원이 가득 찼습니다");
         }
 
-        Optional<Enrollment> existingEnrollment = enrollmentRepository
-                .findByCourseIdAndUserId(request.getCourseId(), userId);
-
-        if (existingEnrollment.isPresent()) {
-            EnrollmentStatus status = existingEnrollment.get().getStatus();
-            if (status == EnrollmentStatus.PENDING || status == EnrollmentStatus.CONFIRMED) {
-                throw new DuplicateEnrollmentException(course.getId(), userId);
-            }
-        }
+        // 중복 신청 확인
+        enrollmentRepository.findByStudentIdAndCourseId(studentId, courseId)
+                .ifPresent(e -> {
+                    if (e.getStatus() != EnrollmentStatus.CANCELLED) {
+                        throw new DuplicateEnrollmentException("이미 신청한 강의입니다");
+                    }
+                });
 
         Enrollment enrollment = Enrollment.builder()
                 .id(UUID.randomUUID().toString())
-                .courseId(course.getId())
-                .userId(userId)
+                .student(student)
+                .course(course)
                 .status(EnrollmentStatus.PENDING)
+                .enrolledAt(LocalDateTime.now())
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
                 .build();
 
-        return EnrollmentResponse.from(enrollmentRepository.save(enrollment));
+        Enrollment saved = enrollmentRepository.save(enrollment);
+        
+        // 강의 인원 증가
+        courseService.increaseCourseCapacity(courseId, 1);
+
+        return EnrollmentResponse.from(saved);
     }
 
-    public EnrollmentResponse confirmPayment(String enrollmentId, String userId) {
-        log.info("결제 확정 요청: enrollmentId={}, userId={}", enrollmentId, userId);
+    /**
+     * 결제 확정 (PENDING → CONFIRMED)
+     */
+    public EnrollmentResponse confirmPayment(String enrollmentId, String studentId) {
+        Enrollment enrollment = enrollmentRepository.findByIdWithLock(enrollmentId)
+                .orElseThrow(() -> new EnrollmentNotFoundException("신청을 찾을 수 없습니다: " + enrollmentId));
 
-        Enrollment enrollment = enrollmentRepository.findById(enrollmentId)
-                .orElseThrow(() -> new EnrollmentNotFoundException(enrollmentId));
-
-        if (!enrollment.getUserId().equals(userId)) {
-            throw new UnauthorizedException("이 신청을 변경할 권한이 없습니다");
+        // 권한 확인
+        if (!enrollment.getStudent().getId().equals(studentId)) {
+            throw new UnauthorizedException("본인의 신청만 확정할 수 있습니다");
         }
 
-        if (!enrollment.isPending()) {
-            throw new InvalidStateException(enrollment.getStatus().toString(), EnrollmentStatus.CONFIRMED.toString());
+        // 상태 확인
+        if (enrollment.getStatus() != EnrollmentStatus.PENDING) {
+            throw new InvalidStateException("신청 상태가 올바르지 않습니다");
         }
 
-        Class course = classRepository.findByIdWithLock(enrollment.getCourseId())
-                .orElseThrow(() -> new CourseNotFoundException(enrollment.getCourseId()));
-
-        if (course.isCapacityFull()) {
-            throw new CapacityExceededException(course.getId());
+        // 강의 정원 재확인
+        Course course = enrollment.getCourse();
+        if (course.getCurrentEnrollment() > course.getMaxCapacity()) {
+            throw new CapacityExceededException("강의 정원이 초과되었습니다");
         }
 
-        enrollment.confirm();
+        enrollment.setStatus(EnrollmentStatus.CONFIRMED);
+        enrollment.setConfirmedAt(LocalDateTime.now());
+        enrollment.setUpdatedAt(LocalDateTime.now());
+
+        Enrollment updated = enrollmentRepository.save(enrollment);
+        return EnrollmentResponse.from(updated);
+    }
+
+    /**
+     * 신청 취소 (CONFIRMED → CANCELLED)
+     */
+    public EnrollmentResponse cancelEnrollment(String enrollmentId, String studentId) {
+        Enrollment enrollment = enrollmentRepository.findByIdWithLock(enrollmentId)
+                .orElseThrow(() -> new EnrollmentNotFoundException("신청을 찾을 수 없습니다: " + enrollmentId));
+
+        // 권한 확인
+        if (!enrollment.getStudent().getId().equals(studentId)) {
+            throw new UnauthorizedException("본인의 신청만 취소할 수 있습니다");
+        }
+
+        // 상태 확인
+        if (enrollment.getStatus() == EnrollmentStatus.CANCELLED) {
+            throw new InvalidStateException("이미 취소된 신청입니다");
+        }
+
+        // 취소 기한 확인 (CONFIRMED 후 7일 이내만 취소 가능)
+        if (enrollment.getStatus() == EnrollmentStatus.CONFIRMED) {
+            LocalDateTime deadline = enrollment.getConfirmedAt().plusDays(CANCELLATION_PERIOD_DAYS);
+            if (LocalDateTime.now().isAfter(deadline)) {
+                throw new CancellationPeriodExceededException("취소 기한이 지났습니다 (7일 이내)");
+            }
+        }
+
+        enrollment.setStatus(EnrollmentStatus.CANCELLED);
+        enrollment.setCancelledAt(LocalDateTime.now());
+        enrollment.setUpdatedAt(LocalDateTime.now());
+
         Enrollment updated = enrollmentRepository.save(enrollment);
 
-        course.setCurrentEnrollment(course.getCurrentEnrollment() + 1);
-        classRepository.save(course);
+        // 강의 인원 감소
+        courseService.decreaseCourseCapacity(enrollment.getCourse().getId(), 1);
 
         return EnrollmentResponse.from(updated);
     }
 
-    public EnrollmentResponse cancelEnrollment(String enrollmentId, String userId) {
-        log.info("신청 취소 요청: enrollmentId={}, userId={}", enrollmentId, userId);
-
+    /**
+     * 신청 상세 조회
+     */
+    public EnrollmentResponse getEnrollment(String enrollmentId, String studentId) {
         Enrollment enrollment = enrollmentRepository.findById(enrollmentId)
-                .orElseThrow(() -> new EnrollmentNotFoundException(enrollmentId));
+                .orElseThrow(() -> new EnrollmentNotFoundException("신청을 찾을 수 없습니다: " + enrollmentId));
 
-        if (!enrollment.getUserId().equals(userId)) {
-            throw new UnauthorizedException("이 신청을 변경할 권한이 없습니다");
-        }
-
-        if (enrollment.getStatus() == EnrollmentStatus.CANCELLED) {
-            throw new InvalidStateException(EnrollmentStatus.CANCELLED.toString(), EnrollmentStatus.CANCELLED.toString());
-        }
-
-        if (enrollment.isConfirmed()) {
-            checkCancellationDeadline(enrollment);
-            
-            Class course = classRepository.findById(enrollment.getCourseId())
-                    .orElseThrow(() -> new CourseNotFoundException(enrollment.getCourseId()));
-            course.setCurrentEnrollment(Math.max(0, course.getCurrentEnrollment() - 1));
-            classRepository.save(course);
-        }
-
-        enrollment.cancel();
-        return EnrollmentResponse.from(enrollmentRepository.save(enrollment));
-    }
-
-    private void checkCancellationDeadline(Enrollment enrollment) {
-        LocalDateTime confirmedAt = enrollment.getConfirmedAt();
-        LocalDateTime now = LocalDateTime.now();
-        
-        if (confirmedAt != null) {
-            long daysPassed = ChronoUnit.DAYS.between(confirmedAt, now);
-            if (daysPassed > CANCELLATION_DEADLINE_DAYS) {
-                // ⭐ 생성자 인자 2개를 맞추기 위해 현재 상태와 타겟 상태를 넘겨줌
-                throw new InvalidStateException(enrollment.getStatus().toString(), "EXPIRED_CANCEL");
-            }
-        }
-    }
-
-    @Transactional(readOnly = true)
-    public PaginatedResponse<EnrollmentResponse> getMyEnrollments(String userId, List<EnrollmentStatus> statuses, Pageable pageable) {
-        Page<Enrollment> page = (statuses == null || statuses.isEmpty()) 
-            ? enrollmentRepository.findByUserId(userId, pageable)
-            : enrollmentRepository.findByUserIdAndStatusIn(userId, statuses, pageable);
-        return PaginatedResponse.from(page.map(EnrollmentResponse::from));
-    }
-
-    @Transactional(readOnly = true)
-    public EnrollmentResponse getEnrollment(String enrollmentId, String userId) {
-        Enrollment enrollment = enrollmentRepository.findById(enrollmentId)
-                .orElseThrow(() -> new EnrollmentNotFoundException(enrollmentId));
-
-        if (!enrollment.getUserId().equals(userId)) {
-            throw new UnauthorizedException("이 신청을 조회할 권한이 없습니다");
+        // 권한 확인
+        if (!enrollment.getStudent().getId().equals(studentId)) {
+            throw new UnauthorizedException("본인의 신청만 조회할 수 있습니다");
         }
 
         return EnrollmentResponse.from(enrollment);
     }
 
-    @Transactional(readOnly = true)
-    public PaginatedResponse<EnrollmentResponse> getEnrollmentsByCourse(String courseId, Pageable pageable) {
-        return PaginatedResponse.from(enrollmentRepository.findByCourseId(courseId, pageable).map(EnrollmentResponse::from));
+    /**
+     * 내 신청 목록 조회
+     */
+    public PaginatedResponse<EnrollmentResponse> getMyEnrollments(String studentId, Pageable pageable) {
+        Page<Enrollment> page = enrollmentRepository.findByStudentId(studentId, pageable);
+
+        return PaginatedResponse.from(
+                page.map(EnrollmentResponse::from),
+                page.getNumber(),
+                page.getSize(),
+                page.getTotalElements(),
+                page.getTotalPages(),
+                page.isFirst(),
+                page.isLast()
+        );
     }
 
-    @Transactional(readOnly = true)
-    public List<EnrollmentResponse> getConfirmedEnrollments(String courseId) {
-        return enrollmentRepository.findByCourseIdAndStatus(courseId, EnrollmentStatus.CONFIRMED).stream()
-                .map(EnrollmentResponse::from)
-                .toList();
+    /**
+     * 강의별 수강생 목록 조회 (강사만)
+     */
+    public PaginatedResponse<EnrollmentResponse> getEnrollmentsByCourse(String courseId, String creatorId, Pageable pageable) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new CourseNotFoundException("강의를 찾을 수 없습니다: " + courseId));
+
+        // 권한 확인 (강사만)
+        if (!course.getCreator().getId().equals(creatorId)) {
+            throw new UnauthorizedException("강의 생성자만 조회 가능합니다");
+        }
+
+        Page<Enrollment> page = enrollmentRepository.findByCourseId(courseId, pageable);
+
+        return PaginatedResponse.from(
+                page.map(EnrollmentResponse::from),
+                page.getNumber(),
+                page.getSize(),
+                page.getTotalElements(),
+                page.getTotalPages(),
+                page.isFirst(),
+                page.isLast()
+        );
     }
 }

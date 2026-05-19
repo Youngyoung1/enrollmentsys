@@ -1,6 +1,7 @@
 package com.example.liveclass.dto.response;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -16,41 +17,51 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@Schema(description = "페이지네이션 응답")
 public class PaginatedResponse<T> {
 
-    @JsonProperty("content")
+    @Schema(description = "데이터 목록")
     private List<T> content;
 
-    @JsonProperty("page")
-    private Integer page;
+    @Schema(description = "현재 페이지 번호", example = "0")
+    private int page;
 
-    @JsonProperty("size")
-    private Integer size;
+    @Schema(description = "페이지 크기", example = "20")
+    private int size;
 
-    @JsonProperty("total")
-    private Long total;
+    @Schema(description = "전체 데이터 수", example = "100")
+    private long total;
 
-    @JsonProperty("totalPages")
-    private Integer totalPages;
+    @Schema(description = "전체 페이지 수", example = "5")
+    private int totalPages;
 
-    @JsonProperty("isFirst")
-    private Boolean isFirst;
+    @Schema(description = "첫 페이지 여부", example = "true")
+    private boolean isFirst;
 
-    @JsonProperty("isLast")
-    private Boolean isLast;
+    @Schema(description = "마지막 페이지 여부", example = "false")
+    private boolean isLast;
 
     /**
-     * Spring Data Page에서 PaginatedResponse로 변환
+     * Page → PaginatedResponse 변환
      */
-    public static <T> PaginatedResponse<T> from(Page<T> page) {
+    public static <T> PaginatedResponse<T> from(
+            Page<T> page,
+            int pageNumber,
+            int pageSize,
+            long total,
+            int totalPages,
+            boolean isFirst,
+            boolean isLast
+    ) {
         return PaginatedResponse.<T>builder()
                 .content(page.getContent())
-                .page(page.getNumber())
-                .size(page.getSize())
-                .total(page.getTotalElements())
-                .totalPages(page.getTotalPages())
-                .isFirst(page.isFirst())
-                .isLast(page.isLast())
+                .page(pageNumber)
+                .size(pageSize)
+                .total(total)
+                .totalPages(totalPages)
+                .isFirst(isFirst)
+                .isLast(isLast)
                 .build();
     }
 }

@@ -1,8 +1,9 @@
 package com.example.liveclass.dto.response;
-import com.fasterxml.jackson.annotation.JsonProperty;
 
 import com.example.liveclass.entity.Enrollment;
-import com.example.liveclass.entity.EnrollmentStatus;
+import com.example.liveclass.entity.Enrollment.EnrollmentStatus;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -11,79 +12,61 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 /**
- * 신청 응답 DTO
+ * 수강 신청 응답 DTO
  */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@Schema(description = "수강 신청 정보")
 public class EnrollmentResponse {
 
-    @JsonProperty("id")
+    @Schema(description = "신청 ID", example = "550e8400-e29b-41d4-a716-446655440000")
     private String id;
 
-    @JsonProperty("courseId")
+    @Schema(description = "학생 ID", example = "student-1")
+    private String studentId;
+
+    @Schema(description = "강의 ID", example = "550e8400-e29b-41d4-a716-446655440001")
     private String courseId;
 
-    @JsonProperty("userId")
-    private String userId;
+    @Schema(description = "강의 제목", example = "Spring Boot 실전")
+    private String courseTitle;
 
-    @JsonProperty("status")
+    @Schema(description = "신청 상태", example = "PENDING")
     private EnrollmentStatus status;
 
-    @JsonProperty("confirmedAt")
+    @Schema(description = "확정 시간", example = "2026-05-19T02:23:51.541Z")
     private LocalDateTime confirmedAt;
 
-    @JsonProperty("cancelledAt")
+    @Schema(description = "취소 시간", example = "2026-05-19T02:23:51.541Z")
     private LocalDateTime cancelledAt;
 
-    @JsonProperty("createdAt")
+    @Schema(description = "신청 시간", example = "2026-05-19T02:23:51.541Z")
+    private LocalDateTime enrolledAt;
+
+    @Schema(description = "생성 시간", example = "2026-05-19T02:23:51.541Z")
     private LocalDateTime createdAt;
 
-    @JsonProperty("updatedAt")
+    @Schema(description = "수정 시간", example = "2026-05-19T02:23:51.541Z")
     private LocalDateTime updatedAt;
 
-    @JsonProperty("course")
-    private SimpleClassResponse course;
-
     /**
-     * Enrollment 엔티티에서 Response DTO로 변환
+     * Entity → Response 변환
      */
-    public static EnrollmentResponse from(Enrollment enrollment) {
+    public static EnrollmentResponse from(Enrollment entity) {
         return EnrollmentResponse.builder()
-                .id(enrollment.getId())
-                .courseId(enrollment.getCourseId())
-                .userId(enrollment.getUserId())
-                .status(enrollment.getStatus())
-                .confirmedAt(enrollment.getConfirmedAt())
-                .cancelledAt(enrollment.getCancelledAt())
-                .createdAt(enrollment.getCreatedAt())
-                .updatedAt(enrollment.getUpdatedAt())
+                .id(entity.getId())
+                .studentId(entity.getStudent().getId())
+                .courseId(entity.getCourse().getId())
+                .courseTitle(entity.getCourse().getTitle())
+                .status(entity.getStatus())
+                .confirmedAt(entity.getConfirmedAt())
+                .cancelledAt(entity.getCancelledAt())
+                .enrolledAt(entity.getEnrolledAt())
+                .createdAt(entity.getCreatedAt())
+                .updatedAt(entity.getUpdatedAt())
                 .build();
-    }
-
-    /**
-     * 간단한 강의 정보 DTO (중첩)
-     */
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class SimpleClassResponse {
-
-        @JsonProperty("id")
-        private String id;
-
-        @JsonProperty("title")
-        private String title;
-
-        @JsonProperty("price")
-        private Integer price;
-
-        @JsonProperty("startDate")
-        private LocalDateTime startDate;
-
-        @JsonProperty("endDate")
-        private LocalDateTime endDate;
     }
 }
