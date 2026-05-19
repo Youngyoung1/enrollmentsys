@@ -5,6 +5,7 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
+import io.swagger.v3.oas.models.servers.Server; // ✨ 추가됨
 import io.swagger.v3.oas.models.tags.Tag;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,7 +17,18 @@ public class SwaggerConfig {
 
     @Bean
     public OpenAPI customOpenAPI() {
+        // ✨ [추가] CORS 에러 방지를 위한 서버 URL 정의
+        Server prodServer = new Server();
+        prodServer.setUrl("https://enrollmentsys-production.up.railway.app");
+        prodServer.setDescription("Production Server (Railway)");
+
+        Server localServer = new Server();
+        localServer.setUrl("http://localhost:8080");
+        localServer.setDescription("Local Server (내 컴퓨터)");
+
         return new OpenAPI()
+                // ✨ [추가] 서버 리스트를 가장 먼저 주입합니다.
+                .servers(List.of(prodServer, localServer))
                 .info(new Info()
                         .title("LiveClass API")
                         .version("1.0.0")
@@ -39,7 +51,6 @@ public class SwaggerConfig {
                 .components(new Components()
                         .addSecuritySchemes("ApiKeyAuth",
                                 new SecurityScheme()
-                                        // ✅ HTTP 타입으로 변경 → Swagger UI가 Authorization 헤더에 직접 주입
                                         .type(SecurityScheme.Type.HTTP)
                                         .scheme("bearer")
                                         .bearerFormat("ID")

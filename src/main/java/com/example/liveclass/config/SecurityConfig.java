@@ -13,21 +13,6 @@ import java.util.List;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    // ✨ [추가] Swagger가 Railway 배포 주소를 올바르게 가리키도록 설정
-    @Bean
-    public OpenAPI customOpenAPI() {
-        Server prodServer = new Server();
-        // ⚠️ 본인의 실제 Railway 도메인 주소를 정확하게 입력하세요.
-        prodServer.setUrl("https://enrollmentsys-production.up.railway.app");
-        prodServer.setDescription("Production Server");
-
-        Server localServer = new Server();
-        localServer.setUrl("http://localhost:8080");
-        localServer.setDescription("Local Server");
-
-        return new OpenAPI().servers(List.of(prodServer, localServer));
-    }
-
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
