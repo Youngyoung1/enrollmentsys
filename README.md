@@ -709,14 +709,14 @@ Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: X.XXs
    ```
    1. Health Check (GET /api/health)
    2. 강의 생성 (POST /api/classes)
-   3. 강의 상태 변경 (PATCH /api/classes/{id}/status)
+   3. 강의 상태 변경 (PATCH /api/classes/{courseId}/status)
    4. 강의 목록 조회 (GET /api/classes)
-   5. 강의 상세 조회 (GET /api/classes/{id})
+   5. 강의 상세 조회 (GET /api/classes/{courseId})
    6. 수강 신청 (POST /api/enrollments)
-   7. 결제 확정 (PATCH /api/enrollments/{id}/confirm)
-   8. 신청 취소 (PATCH /api/enrollments/{id}/cancel)
+   7. 결제 확정 (PATCH /api/enrollments/{enrollmentId}/confirm)
+   8. 신청 취소 (PATCH /api/enrollments/{enrollmentId}/cancel)
    9. 내 신청 목록 (GET /api/enrollments/me)
-   10. 강의별 수강생 (GET /api/enrollments/course/{id})
+   10. 강의별 수강생 (GET /api/enrollments/course/{couserId})
    ```
 
 ### 4️⃣ 커버리지 확인
