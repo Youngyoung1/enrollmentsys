@@ -9,6 +9,7 @@ import org.springframework.context.annotation.ComponentScan;
  * 메인 진입점
  */
 @SpringBootApplication
+@ComponentScan(basePackages = {"com.example.liveclass", "org.springdoc"})
 public class EnrollmentSystemApplication {
 
     public static void main(String[] args) {

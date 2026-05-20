@@ -3,44 +3,53 @@ spring:
     name: liveclass
 
   datasource:
-    # Save database as a file inside the /data directory for Railway Volume persistence
-    url: jdbc:h2:file:/data/liveclassdb;AUTO_SERVER=TRUE;FILE_LOCK=SOCKET
+    # 💡 배포 환경(리눅스)에서 에러가 나지 않도록 상대 경로(./)로 안전하게 설정합니다.
+    url: jdbc:h2:file:./data/liveclassdb;AUTO_SERVER=TRUE;FILE_LOCK=SOCKET
     driver-class-name: org.h2.Driver
     username: sa
-    password: your_secure_password # ⚠️ Change this to a secure password!
+    password: your_secure_password
 
   jpa:
     database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
-      # 'update' ensures your tables are created automatically without deleting existing data on restart
-      ddl-auto: create-drop
+      ddl-auto: update
     properties:
       hibernate:
-        show_sql: true
         format_sql: true
         use_sql_comments: true
+        show_sql: false
 
-  # H2 Console configuration for remote access
   h2:
     console:
       enabled: true
       path: /h2-console
       settings:
-        web-allow-others: true # Allows you to access the console via your Railway public URL
+        web-allow-others: true
 
-# Springdoc OpenAPI (Swagger UI) Configuration
+  # 💡 부트 3.4.x 정적 자원 핸들러가 클라우드 리눅스 환경에서도 유실되지 않도록 보장합니다.
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
+
+server:
+  # 💡 Railway는 내부 시스템에서 환경 변수로 PORT를 주입하므로 이 설정을 반드시 유지해야 합니다.
+  port: ${PORT:8080}
+  servlet:
+    context-path: /
+
 springdoc:
   api-docs:
-    path: /api-docs
+    path: /v3/api-docs
+    enabled: true
   swagger-ui:
     path: /swagger-ui.html
-    operations-sorter: alpha
+    enabled: true
+    operations-sorter: method
     tags-sorter: alpha
-    packages-to-scan: com.example.liveclass
+    disable-swagger-default-url: false # 💡 로컬과 서버 모두 화면이 뚫리도록 반드시 false 유지
 
-# Logging configuration to monitor your application queries in Railway logs
 logging:
   level:
     root: INFO
-    org.hibernate.SQL: DEBUG
-    org.hibernate.orm.results: TRACE
+    com.example.liveclass: INFO
+    org.springframework.web: INFO
