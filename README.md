@@ -72,144 +72,97 @@ http://localhost:8080/api/h2-console
 
 상세 가이드: [Railway 배포 섹션](#-railway-배포-가이드) 참조
 
----
-
-## 📊 데이터 모델 (ERD)
-
-### 테이블 관계도
-
-```
-┌─────────────────────┐
-│      APP_USER       │
-├─────────────────────┤
-│ PK: id (VARCHAR)    │
-│ name                │
-│ email (UNIQUE)      │
-│ role (ENUM)         │ ← STUDENT/CREATOR/ADMIN
-│ created_at          │
-│ updated_at          │
-└─────────────────────┘
-         ▲
-         │ 1:1
-         │ (id 공유)
-    ┌────┴─────┐
-    │          │
-┌───┴────┐  ┌─┴──────┐
-│CREATOR │  │STUDENT │
-├────────┤  ├────────┤
-│PK: id  │  │PK: id  │
-│bio     │  │bio     │
-│expert. │  │phone   │
-│total_  │  │enrolled│
-│students│  │_at     │
-│avg_    │  │updated │
-│rating  │  │_at     │
-└────────┘  └────────┘
-     │
-     │ 1:N
-     ▼
-┌─────────────────────┐
-│      COURSE         │
-├─────────────────────┤
-│ PK: id (UUID)       │
-│ FK: creator_id      │ → CREATOR.id
-│ title               │
-│ description         │
-│ price               │
-│ max_capacity        │
-│ current_enrollment  │
-│ status (ENUM)       │ ← DRAFT/OPEN/CLOSED
-│ start_date          │
-│ end_date            │
-│ created_at          │
-│ updated_at          │
-└─────────────────────┘
-         ▲
-         │ 1:N
-         │ (course_id)
-         │
-┌────────┴────────────┐
-│    ENROLLMENT       │
-├─────────────────────┤
-│ PK: id (UUID)       │
-│ course_id           │ → COURSE.id
-│ user_id             │ → APP_USER.id
-│ status (ENUM)       │ ← PENDING/CONFIRMED/CANCELLED
-│ enrolled_at         │
-│ confirmed_at        │
-│ cancelled_at        │
-│ created_at          │
-│ updated_at          │
-└─────────────────────┘
-```
-
-### APP_USER 테이블
-
-| 컬럼 | 타입 | 제약 | 설명 |
-|------|------|------|------|
-| **id** | VARCHAR(255) | PK | 사용자 ID (creator-1, student-1) |
-| **name** | VARCHAR(255) | NOT NULL | 이름 |
-| **email** | VARCHAR(255) | UNIQUE | 이메일 |
-| **role** | ENUM | NOT NULL | STUDENT/CREATOR/ADMIN |
-| **created_at** | TIMESTAMP | NOT NULL | 생성 시간 |
-| **updated_at** | TIMESTAMP | NULL | 수정 시간 |
-
-> ⚠️ **참고**: `USER`는 H2 예약어이므로 테이블명을 `APP_USER`로 변경
-
-### CREATOR 테이블
-
-| 컬럼 | 타입 | 제약 | 설명 |
-|------|------|------|------|
-| **id** | VARCHAR(255) | PK | APP_USER.id와 동일 |
-| **bio** | TEXT | NULL | 강사 소개 |
-| **expertise** | VARCHAR(255) | NULL | 전문 분야 |
-| **total_students** | INT | DEFAULT 0 | 누적 학생 수 |
-| **avg_rating** | DOUBLE | DEFAULT 0.0 | 평균 평점 |
-| **enrolled_at** | TIMESTAMP | NULL | 가입일 |
-| **updated_at** | TIMESTAMP | NULL | 수정일 |
-
-### STUDENT 테이블
-
-| 컬럼 | 타입 | 제약 | 설명 |
-|------|------|------|------|
-| **id** | VARCHAR(255) | PK | APP_USER.id와 동일 |
-| **bio** | TEXT | NULL | 학생 소개 |
-| **phone** | VARCHAR(255) | NULL | 전화번호 (010-XXXX-XXXX) |
-| **enrolled_at** | TIMESTAMP | NULL | 가입일 |
-| **updated_at** | TIMESTAMP | NULL | 수정일 |
-
-### COURSE 테이블
-
-| 컬럼 | 타입 | 제약 | 설명 |
-|------|------|------|------|
-| **id** | VARCHAR(255) | PK | UUID 형식 |
-| **creator_id** | VARCHAR(255) | FK NOT NULL | CREATOR.id 참조 |
-| **title** | VARCHAR(255) | NOT NULL | 강의 제목 |
-| **description** | TEXT | NULL | 강의 설명 |
-| **price** | INT | NOT NULL | 가격 (원) |
-| **max_capacity** | INT | NOT NULL | 최대 정원 |
-| **current_enrollment** | INT | DEFAULT 0 | 현재 신청 인원 |
-| **status** | ENUM | NOT NULL | DRAFT/OPEN/CLOSED |
-| **start_date** | TIMESTAMP | NOT NULL | 강의 시작일 |
-| **end_date** | TIMESTAMP | NOT NULL | 강의 종료일 |
-| **created_at** | TIMESTAMP | NOT NULL | 생성 시간 |
-| **updated_at** | TIMESTAMP | NULL | 수정 시간 |
-
-### ENROLLMENT 테이블
-
-| 컬럼 | 타입 | 제약 | 설명 |
-|------|------|------|------|
-| **id** | VARCHAR(255) | PK | UUID 형식 |
-| **course_id** | VARCHAR(255) | NOT NULL | 강의 ID |
-| **user_id** | VARCHAR(255) | NOT NULL | 학생 ID |
-| **status** | ENUM | NOT NULL | PENDING/CONFIRMED/CANCELLED |
-| **enrolled_at** | TIMESTAMP | NOT NULL | 신청 시간 |
-| **confirmed_at** | TIMESTAMP | NULL | 결제 확정 시간 |
-| **cancelled_at** | TIMESTAMP | NULL | 취소 시간 |
-| **created_at** | TIMESTAMP | NOT NULL | 생성 시간 |
-| **updated_at** | TIMESTAMP | NULL | 수정 시간 |
 
 ---
+
+## 📋 핵심 요구사항 요약
+
+**1. 강의 관리**
+- 목록 조회: 누구나 가능, 상태별 필터(DRAFT, OPEN, CLOSED) 및 페이지네이션 지원
+
+- 상세 조회: 특정 강의 정보 반환 (CONFIRMED 상태의 인원만 실시간 카운트하여 포함)
+
+**2. 수강 신청 및 대기열**
+- 신청 조건: STUDENT 권한만 가능, OPEN 상태의 강의만 신청 가능 (중복 신청 불가)
+
+- 정원 내 (PENDING): 순번(1부터 시작) 부여 후 결제 대기 상태
+
+- 정원 초과 (WAITING): 정원 초과 시 자동으로 대기 상태 및 합산 순번 부여
+
+- 동시성 제어: 비관적 락(PESSIMISTIC_WRITE)을 사용하여 대규모 동시 신청 시에도 정확히 정원만큼만 PENDING 처리
+
+**3. 결제 확정 및 취소**
+- 결제 확정: 본인만 가능, PENDING → CONFIRMED로 상태 변경 및 강의 현재 인원 1 증가
+
+- 일반 취소: 본인만 가능, CANCELLED 상태로 변경 (시간 기록)
+
+- 확정 취소 (7일 제한): CONFIRMED 상태는 확정일 기준 7일 이내만 취소 가능
+
+- 대기열 자동 승격: 기존 신청 취소 시, WAITING 중 가장 빠른 순번이 동일 트랜잭션 내에서 즉시 PENDING으로 자동 승격
+
+**4. 조회 권한 및 페이지네이션**
+- 내 수강 신청: 본인만 가능, 모든 상태의 신청 내역을 페이지네이션 정보와 함께 조회
+
+- 강의별 수강생 목록: 강의 생성자(CREATOR)만 가능, 해당 강의의 모든 수강생 목록 페이지네이션 조회
+
+---
+
+## 설계 결정
+
+<img width="443" height="249" alt="image" src="https://github.com/user-attachments/assets/2bc67e88-fb7a-48cc-9207-3cacb5af0839" />
+
+
+## 이유
+
+- 수강 신청한 인원 중 기존 인원이 해당 수강을 취소할 때 자동으로 승격될 수 있게 모델을 설정하였음. 수강 인원이 다 찼을 경우 대기표 형태로 현실처럼 반영하였음.
+
+---
+
+## ❌ 미구현 항목
+
+### 미구현 기능
+
+| 기능 | 이유 |
+|------|------|
+| **JWT 인증** | Authorization 헤더 방식으로 단순화 |
+| **결제 시스템 연동** | 과제 명세상 상태 변경으로 대체 |
+| **로깅 시스템** | SLF4J/Logback만 사용 |
+
+### 향후 개선 가능
+
+- [ ] 대기열 자동 승격 시스템
+- [ ] JWT 기반 인증
+- [ ] PostgreSQL 영구 저장
+- [ ] Redis 캐싱
+- [ ] 강의 검색/필터링
+- [ ] 강의 평점/리뷰
+- [ ] 메시지 큐 (RabbitMQ)
+- [ ] Prometheus/Grafana 모니터링
+
+---
+
+## 🤖 AI 활용 범위
+
+### 사용한 AI: Claude (Anthropic)
+
+| 항목 | AI 비율 | 개발자 |
+|------|---------|--------|
+| Entity 설계 | 20% | 80% |
+| Repository | 30% | 70% |
+| Service 로직 | 40% | 60% |
+| Controller | 50% | 50% |
+| Exception | 80% | 20% |
+| Config (Swagger, Security) | 90% | 10% |
+| Test 코드 | 50% | 50% |
+| 문서화 | 90% | 10% |
+| **평균** | **56%** | **44%** |
+
+### AI 미사용 부분
+
+- 핵심 비즈니스 로직 결정
+- 데이터 모델 관계 설계
+- 에러 케이스 정의
+- 동시성 제어 전략 선택
 
 ## 📡 API 목록
 
@@ -408,8 +361,12 @@ Authorization: student-1
 ```http
 GET /api/enrollments/course/{courseId}?page=0&size=20
 ```
-
 ---
+
+## 📊 데이터 모델 설명
+
+<img width="1120" height="1012" alt="1" src="https://github.com/user-attachments/assets/df54eb1a-f650-4373-8308-e565db12814c" />
+
 
 ## 🧪 테스트 실행 방법
 
@@ -565,115 +522,9 @@ liveclass/
 └── README.md
 ```
 
-**파일 개수:**
-- Entity: 7개 (User, Creator, Student, Course, Enrollment + 2 Status)
-- Repository: 5개
-- Service: 4개
-- Controller: 4개
-- DTO: 10개
-- Exception: 9개
-- Config: 2개
-- Test: 1개
-- **총 42개 파일**
-
 ---
 
-## 🎯 설계 결정
 
-### 1. Role 기반 권한 분리
-
-```java
-public enum UserRole {
-    STUDENT, CREATOR, ADMIN
-}
-```
-
-각 Service에서 권한 검증:
-- **Course 생성/수정**: CREATOR만 가능
-- **Enrollment 신청/취소**: STUDENT만 가능
-
-### 2. 비관적 락 (Pessimistic Lock)
-
-```java
-@Lock(LockModeType.PESSIMISTIC_WRITE)
-@Query("SELECT e FROM Enrollment e WHERE e.id = :id")
-Optional<Enrollment> findByIdWithLock(@Param("id") String id);
-```
-
-**이유**: 정원 초과를 DB 레벨에서 완벽하게 방지
-
-### 3. 테이블명 변경
-
-`USER` → `app_user` (H2 예약어 회피)
-
-### 4. UUID ID 생성
-
-```java
-@PrePersist
-protected void onCreate() {
-    if (this.id == null) {
-        this.id = UUID.randomUUID().toString();
-    }
-}
-```
-
-### 5. 상태 단방향 전이
-
-```
-Course:    DRAFT → OPEN → CLOSED
-Enrollment: PENDING → CONFIRMED → CANCELLED
-```
-
----
-
-## ❌ 미구현 항목
-
-### 미구현 기능
-
-| 기능 | 이유 |
-|------|------|
-| **대기열(Waitlist)** | 시간 제약, 핵심 기능 우선 |
-| **JWT 인증** | Authorization 헤더 방식으로 단순화 |
-| **결제 시스템 연동** | 과제 명세상 상태 변경으로 대체 |
-| **로깅 시스템** | SLF4J/Logback만 사용 |
-
-### 향후 개선 가능
-
-- [ ] 대기열 자동 승격 시스템
-- [ ] JWT 기반 인증
-- [ ] PostgreSQL 영구 저장
-- [ ] Redis 캐싱
-- [ ] 강의 검색/필터링
-- [ ] 강의 평점/리뷰
-- [ ] 메시지 큐 (RabbitMQ)
-- [ ] Prometheus/Grafana 모니터링
-
----
-
-## 🤖 AI 활용 범위
-
-### 사용한 AI: Claude (Anthropic)
-
-| 항목 | AI 비율 | 개발자 |
-|------|---------|--------|
-| Entity 설계 | 20% | 80% |
-| Repository | 30% | 70% |
-| Service 로직 | 40% | 60% |
-| Controller | 50% | 50% |
-| Exception | 80% | 20% |
-| Config (Swagger, Security) | 90% | 10% |
-| Test 코드 | 50% | 50% |
-| 문서화 | 90% | 10% |
-| **평균** | **56%** | **44%** |
-
-### AI 미사용 부분
-
-- 핵심 비즈니스 로직 결정
-- 데이터 모델 관계 설계
-- 에러 케이스 정의
-- 동시성 제어 전략 선택
-
----
 
 ## 📞 문의
 
