@@ -68,10 +68,9 @@ http://localhost:8080/api/h2-console
 1. **Run** → **Run 'EnrollmentSystemApplication'**
 2. 또는 **Shift + F10**
 
-### 3️⃣ Railway 클라우드 배포 (권장 🌐)
+### 3️⃣ Railway 기반 swagger URL
 
-상세 가이드: [Railway 배포 섹션](#-railway-배포-가이드) 참조
-
+https://enrollmentsys-production.up.railway.app/swagger-ui/index.html#/
 
 ---
 
@@ -454,7 +453,6 @@ liveclass/
 │   │   │   │   └── SwaggerConfig.java        # OpenAPI/Swagger
 │   │   │   │
 │   │   │   ├── controller/                   # REST 컨트롤러
-│   │   │   │   ├── UserController.java       # 회원가입 API
 │   │   │   │   ├── CourseController.java     # 강의 API
 │   │   │   │   ├── EnrollmentController.java # 수강신청 API
 │   │   │   │   └── GlobalException.java
@@ -492,7 +490,9 @@ liveclass/
 │   │   │   │       ├── StudentRegistrationResponse.java
 │   │   │   │       ├── CourseResponse.java
 │   │   │   │       ├── EnrollmentResponse.java
+│   │   │   │       ├── ErrorResponse.java
 │   │   │   │       └── PaginatedResponse.java
+│   │   │   │       ├── StudentRegistraionResponse.java
 │   │   │   │
 │   │   │   ├── exception/                    # 커스텀 예외
 │   │   │   │   ├── UnauthorizedException.java
