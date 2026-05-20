@@ -42,7 +42,7 @@ public class CourseController {
             @Parameter(description = "강사 ID", example = "creator-1", in = ParameterIn.HEADER)
             @RequestHeader(name = "Authorization") String authorization
     ) {
-        String creatorId = AuthorizationUtils.extractUserId(authorization);  // ✅ Bearer 제거
+        String creatorId = AuthorizationUtils.extractUserId(authorization);
         CourseResponse response = courseService.createCourse(request, creatorId);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -61,7 +61,7 @@ public class CourseController {
             @Parameter(description = "강사 ID", example = "creator-1", in = ParameterIn.HEADER)
             @RequestHeader(name = "Authorization") String authorization
     ) {
-        String creatorId = AuthorizationUtils.extractUserId(authorization);  // ✅ Bearer 제거
+        String creatorId = AuthorizationUtils.extractUserId(authorization);
         CourseResponse response = courseService.updateCourseStatus(courseId, request.getStatus(), creatorId);
         return ResponseEntity.ok(response);
     }
@@ -96,7 +96,7 @@ public class CourseController {
             @Parameter(description = "강사 ID", example = "creator-1", in = ParameterIn.HEADER)
             @RequestHeader(name = "Authorization") String authorization
     ) {
-        String creatorId = AuthorizationUtils.extractUserId(authorization);  // ✅ Bearer 제거
+        String creatorId = AuthorizationUtils.extractUserId(authorization);
         Pageable pageable = PageRequest.of(page, size);
         return ResponseEntity.ok(courseService.getMyCourses(creatorId, pageable));
     }

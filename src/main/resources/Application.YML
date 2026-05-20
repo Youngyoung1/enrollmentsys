@@ -4,7 +4,7 @@ spring:
 
   datasource:
     # Save database as a file inside the /data directory for Railway Volume persistence
-    url: jdbc:h2:file:/data/liveclassdb;AUTO_SERVER=TRUE;DB_CLOSE_ON_EXIT=FALSE;FILE_LOCK=SOCKET
+    url: jdbc:h2:file:/data/liveclassdb;AUTO_SERVER=TRUE;FILE_LOCK=SOCKET
     driver-class-name: org.h2.Driver
     username: sa
     password: your_secure_password # ⚠️ Change this to a secure password!
@@ -13,7 +13,7 @@ spring:
     database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
       # 'update' ensures your tables are created automatically without deleting existing data on restart
-      ddl-auto: update
+      ddl-auto: create-drop
     properties:
       hibernate:
         show_sql: true

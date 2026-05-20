@@ -10,7 +10,6 @@ import java.time.LocalDateTime;
 
 /**
  * 수강 신청 응답 DTO
- * 신청된 Enrollment의 UUID를 포함하여 반환
  */
 @Data
 @NoArgsConstructor
@@ -18,28 +17,34 @@ import java.time.LocalDateTime;
 @Builder
 public class EnrollmentResponse {
 
-    private String enrollmentId;        // ✅ Enrollment UUID (핵심!)
+    private String enrollmentId;        // 신청 UUID
     private String userId;              // 학생 ID
     private String courseId;            // 강의 ID
-    private String courseName;          // 강의명 (참고용)
-    private String status;              // 신청 상태 (PENDING, CONFIRMED, CANCELLED)
-    private LocalDateTime enrolledAt;   // 신청 시간
-    private LocalDateTime confirmedAt;  // 결제 확정 시간
-    private LocalDateTime cancelledAt;  // 취소 시간
-    private String message;             // "수강 신청 성공" 등
+    private Integer queuePosition;      // ✅ 순번 (1부터)
+    private String status;              // PENDING/WAITING/CONFIRMED/CANCELLED
+    private LocalDateTime enrolledAt;
+    private LocalDateTime confirmedAt;
+    private LocalDateTime cancelledAt;
+    private String message;
 
-    /**
-     * Enrollment Entity를 Response로 변환
-     */
     public static EnrollmentResponse from(Enrollment enrollment) {
+        String message = switch (enrollment.getStatus()) {
+            case PENDING -> "결제 대기 중입니다 (순번: " + enrollment.getQueuePosition() + ")";
+            case WAITING -> "대기열에 등록되었습니다 (순번: " + enrollment.getQueuePosition() + ")";
+            case CONFIRMED -> "수강이 확정되었습니다";
+            case CANCELLED -> "취소되었습니다";
+        };
+
         return EnrollmentResponse.builder()
-                .enrollmentId(enrollment.getId())  // ✅ UUID 반환
+                .enrollmentId(enrollment.getId())
                 .userId(enrollment.getUserId())
                 .courseId(enrollment.getCourseId())
+                .queuePosition(enrollment.getQueuePosition())  // ✅
                 .status(enrollment.getStatus().toString())
                 .enrolledAt(enrollment.getEnrolledAt())
                 .confirmedAt(enrollment.getConfirmedAt())
                 .cancelledAt(enrollment.getCancelledAt())
+                .message(message)
                 .build();
     }
 }

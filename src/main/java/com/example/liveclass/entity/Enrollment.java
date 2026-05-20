@@ -7,9 +7,11 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 /**
  * 수강 신청 정보 테이블
+ * queuePosition으로 순번 관리 (정원 내: PENDING, 정원 초과: WAITING)
  */
 @Entity
 @Table(name = "enrollment")
@@ -20,27 +22,48 @@ import java.time.LocalDateTime;
 public class Enrollment {
 
     @Id
-    private String id;  // UUID
+    private String id;
 
-    @Column(nullable = false)
-    private String userId;  // 학생 ID
+    @Column(name = "course_id", nullable = false)
+    private String courseId;
 
-    @Column(nullable = false)
-    private String courseId;  // 강의 ID
+    @Column(name = "user_id", nullable = false)
+    private String userId;
+
+    @Column(name = "queue_position", nullable = false)
+    private Integer queuePosition;  // ✅ 순번 (1부터 시작)
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private EnrollmentStatus status;  // 신청 상태
+    private EnrollmentStatus status;
 
-    @Column(nullable = false, updatable = false)
-    private LocalDateTime enrolledAt;  // 신청 시간
+    @Column(name = "enrolled_at", nullable = false, updatable = false)
+    private LocalDateTime enrolledAt;
 
-    private LocalDateTime confirmedAt;  // 결제 확정 시간
+    @Column(name = "confirmed_at")
+    private LocalDateTime confirmedAt;
 
-    private LocalDateTime cancelledAt;  // 취소 시간
+    @Column(name = "cancelled_at")
+    private LocalDateTime cancelledAt;
 
-    @Column(nullable = false, updatable = false)
-    private LocalDateTime createdAt;  // 생성 시간
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
 
-    private LocalDateTime updatedAt;  // 수정 시간
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        if (this.id == null) {
+            this.id = UUID.randomUUID().toString();
+        }
+        LocalDateTime now = LocalDateTime.now();
+        if (this.enrolledAt == null) this.enrolledAt = now;
+        if (this.createdAt == null) this.createdAt = now;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
 }

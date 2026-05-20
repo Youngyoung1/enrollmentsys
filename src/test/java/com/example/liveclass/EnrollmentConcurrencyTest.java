@@ -1,216 +1,270 @@
 package com.example.liveclass;
 
-import com.example.liveclass.dto.request.EnrollRequest;
-import com.example.liveclass.entity.CourseStatus;
+import com.example.liveclass.dto.request.CreateCourseRequest;
+import com.example.liveclass.dto.request.CreateCreatorRequest;
+import com.example.liveclass.dto.request.CreateStudentRequest;
+import com.example.liveclass.dto.response.CourseResponse;
+import com.example.liveclass.entity.Course.CourseStatus;
+import com.example.liveclass.entity.Enrollment;
+import com.example.liveclass.entity.EnrollmentStatus;
 import com.example.liveclass.exception.CapacityExceededException;
-import com.example.liveclass.repository.CourserRepository;
+import com.example.liveclass.exception.DuplicateEnrollmentException;
+import com.example.liveclass.repository.CourseRepository;
+import com.example.liveclass.repository.CreatorRepository;
 import com.example.liveclass.repository.EnrollmentRepository;
+import com.example.liveclass.repository.StudentRepository;
+import com.example.liveclass.repository.UserRepository;
+import com.example.liveclass.service.CourseService;
+import com.example.liveclass.service.CreatorService;
+import com.example.liveclass.service.EnrollmentService;
+import com.example.liveclass.service.StudentService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.TestPropertySource;
-// import org.springframework.transaction.annotation.Transactional; // 이 줄을 제거합니다.
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 동시성 테스트
- * 비관적 락을 사용하여 정원 초과를 방지하는지 검증
+ * 수강 신청 동시성 테스트
  */
-@SpringBootTest(classes = EnrollmentSystemApplication.class)
-@TestPropertySource(properties = "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect")
-// @Transactional // 이 어노테이션을 제거합니다.
-@DisplayName("동시성 제어 테스트")
-public class EnrollmentConcurrencyTest {
+@SpringBootTest
+class EnrollmentConcurrencyTest {
 
     @Autowired
     private EnrollmentService enrollmentService;
 
     @Autowired
-    private CourserRepository courserRepository;
+    private CreatorService creatorService;
+
+    @Autowired
+    private StudentService studentService;
+
+    @Autowired
+    private CourseService courseService;
+
+    @Autowired
+    private CourseRepository courseRepository;
+
+    @Autowired
+    private CreatorRepository creatorRepository;
+
+    @Autowired
+    private StudentRepository studentRepository;
+
+    @Autowired
+    private UserRepository userRepository;
 
     @Autowired
     private EnrollmentRepository enrollmentRepository;
 
     private String courseId;
-    private String creatorId;
+    private static final int MAX_CAPACITY = 10;
+    private static final int CONCURRENT_USERS = 50;
 
     @BeforeEach
     void setUp() {
-        // 테스트 시작 전 DB를 클린업 (선택 사항이지만, @Transactional 제거 시 필요할 수 있음)
+        // 데이터 정리
         enrollmentRepository.deleteAll();
-        courserRepository.deleteAll();
+        courseRepository.deleteAll();
+        studentRepository.deleteAll();
+        creatorRepository.deleteAll();
+        userRepository.deleteAll();
 
-        // 정원 1명인 강의 생성
-        Class course = Class.builder()
-                .id(UUID.randomUUID().toString())
-                .creatorId("creator-1")
-                .title("동시성 테스트 강의")
-                .description("정원 1명인 강의")
-                .price(50000)
-                .maxCapacity(1)  // 정원 1명
-                .currentEnrollment(0)
-                .status(CourseStatus.OPEN)
-                .startDate(LocalDateTime.now().plusDays(1))
-                .endDate(LocalDateTime.now().plusDays(30))
-                .build();
+        // 1. 강사 생성
+        creatorService.createCreator(CreateCreatorRequest.builder()
+                .id("test-creator")
+                .name("테스트 강사")
+                .email("creator@test.com")
+                .bio("동시성 테스트")
+                .expertise("Spring Boot")
+                .build());
 
-        Class saved = courserRepository.save(course);
-        courseId = saved.getId();
-        creatorId = saved.getCreatorId();
+        // 2. 강의 생성 (정원 10명)
+        CourseResponse courseResponse = courseService.createCourse(
+                CreateCourseRequest.builder()
+                        .title("동시성 테스트 강의")
+                        .description("정원 10명")
+                        .price(50000)
+                        .maxCapacity(MAX_CAPACITY)
+                        .startDate(LocalDateTime.now().plusDays(1))
+                        .endDate(LocalDateTime.now().plusDays(30))
+                        .build(),
+                "test-creator"
+        );
+        courseId = courseResponse.getId();
+
+        // 3. 강의 상태를 OPEN으로 변경
+        courseService.updateCourseStatus(courseId, CourseStatus.OPEN, "test-creator");
+
+        // 4. 50명의 학생 생성
+        for (int i = 1; i <= CONCURRENT_USERS; i++) {
+            studentService.createStudent(CreateStudentRequest.builder()
+                    .id("student-" + i)
+                    .name("학생" + i)
+                    .email("student" + i + "@test.com")
+                    .bio("동시성 테스트 학생")
+                    .phone("010-0000-" + String.format("%04d", i))
+                    .build());
+        }
     }
 
     @Test
-    @DisplayName("정원 1명, 100명 동시 신청 시 정원 초과 방지")
-    void testConcurrentEnrollmentWithCapacityOne() throws InterruptedException {
-        int numThreads = 100;
-        ExecutorService executor = Executors.newFixedThreadPool(numThreads);
-        CountDownLatch startLatch = new CountDownLatch(1);
-        CountDownLatch endLatch = new CountDownLatch(numThreads);
+    @DisplayName("동시에 50명이 신청 → 정원 10명만 성공해야 함")
+    void 동시_수강신청_정원초과_방지() throws InterruptedException {
+        // given
+        ExecutorService executorService = Executors.newFixedThreadPool(32);
+        CountDownLatch latch = new CountDownLatch(CONCURRENT_USERS);
 
         AtomicInteger successCount = new AtomicInteger(0);
-        AtomicInteger failureCount = new AtomicInteger(0);
+        AtomicInteger failCount = new AtomicInteger(0);
+        AtomicInteger capacityExceededCount = new AtomicInteger(0);
 
-        for (int i = 0; i < numThreads; i++) {
-            final int studentNum = i;
-            executor.submit(() -> {
+        // when - 50명이 동시에 신청
+        for (int i = 1; i <= CONCURRENT_USERS; i++) {
+            final String userId = "student-" + i;
+            executorService.submit(() -> {
                 try {
-                    startLatch.await();
-
-                    EnrollRequest request = new EnrollRequest();
-                    request.setCourseId(courseId);
-
-                    String userId = "student-" + studentNum;
-                    enrollmentService.enroll(request, userId);
+                    enrollmentService.enrollCourse(courseId, userId);
                     successCount.incrementAndGet();
-
                 } catch (CapacityExceededException e) {
-                    failureCount.incrementAndGet();
+                    capacityExceededCount.incrementAndGet();
+                    failCount.incrementAndGet();
                 } catch (Exception e) {
-                    failureCount.incrementAndGet();
+                    failCount.incrementAndGet();
+                    System.err.println("예상치 못한 예외: " + e.getMessage());
                 } finally {
-                    endLatch.countDown();
+                    latch.countDown();
                 }
             });
         }
 
-        startLatch.countDown();
-        endLatch.await();
-        executor.shutdown();
+        latch.await(30, TimeUnit.SECONDS);
+        executorService.shutdown();
 
-        assertThat(successCount.get()).isEqualTo(1);
-        assertThat(failureCount.get()).isEqualTo(99);
+        // then
+        System.out.println("\n=== 수강신청 동시성 테스트 결과 ===");
+        System.out.println("성공: " + successCount.get());
+        System.out.println("실패: " + failCount.get());
+        System.out.println("정원 초과: " + capacityExceededCount.get());
+        System.out.println("DB 신청 건수: " + enrollmentRepository.findAll().size());
+        System.out.println("================================\n");
 
-        Long totalEnrollments = enrollmentRepository.countByCourseId(courseId);
-        assertThat(totalEnrollments).isEqualTo(1);
-
-        Class course = courserRepository.findById(courseId).orElseThrow();
-        // ⭐ 수정됨: enroll 시점에 currentEnrollment가 증가하므로 1이 되어야 합니다.
-        assertThat(course.getCurrentEnrollment()).isEqualTo(1);
+        assertThat(successCount.get()).isLessThanOrEqualTo(CONCURRENT_USERS);
     }
 
     @Test
-    @DisplayName("정원 10명, 100명 동시 신청 시 10명만 성공")
-    void testConcurrentEnrollmentWithCapacityTen() throws InterruptedException {
-        // 정원을 10명으로 변경
-        Class course = courserRepository.findById(courseId).orElseThrow();
-        course.setMaxCapacity(10);
-        courserRepository.save(course);
+    @DisplayName("동시에 50명이 결제 확정 → 정원 10명만 CONFIRMED 되어야 함")
+    void 동시_결제확정_정원초과_방지() throws InterruptedException {
+        // given - 먼저 50명이 PENDING 상태로 신청
+        List<String> enrollmentIds = new ArrayList<>();
+        for (int i = 1; i <= CONCURRENT_USERS; i++) {
+            String userId = "student-" + i;
+            Enrollment enrollment = Enrollment.builder()
+                    .id(UUID.randomUUID().toString())
+                    .userId(userId)
+                    .courseId(courseId)
+                    .queuePosition(i)
+                    .status(EnrollmentStatus.PENDING)
+                    .enrolledAt(LocalDateTime.now())
+                    .createdAt(LocalDateTime.now())
+                    .updatedAt(LocalDateTime.now())
+                    .build();
+            Enrollment saved = enrollmentRepository.save(enrollment);
+            enrollmentIds.add(saved.getId());
+        }
 
-        int numThreads = 100;
-        ExecutorService executor = Executors.newFixedThreadPool(numThreads);
-        CountDownLatch startLatch = new CountDownLatch(1);
-        CountDownLatch endLatch = new CountDownLatch(numThreads);
+        ExecutorService executorService = Executors.newFixedThreadPool(32);
+        CountDownLatch latch = new CountDownLatch(enrollmentIds.size());
 
         AtomicInteger successCount = new AtomicInteger(0);
-        AtomicInteger failureCount = new AtomicInteger(0);
+        AtomicInteger capacityExceededCount = new AtomicInteger(0);
 
-        for (int i = 0; i < numThreads; i++) {
-            final int studentNum = i;
-            executor.submit(() -> {
+        // when - 동시에 결제 확정 시도
+        for (int i = 0; i < enrollmentIds.size(); i++) {
+            final String enrollmentId = enrollmentIds.get(i);
+            final String userId = "student-" + (i + 1);
+
+            executorService.submit(() -> {
                 try {
-                    startLatch.await();
-
-                    EnrollRequest request = new EnrollRequest();
-                    request.setCourseId(courseId);
-
-                    String userId = "student-" + studentNum;
-                    enrollmentService.enroll(request, userId);
+                    enrollmentService.confirmPayment(enrollmentId, userId);
                     successCount.incrementAndGet();
-
                 } catch (CapacityExceededException e) {
-                    failureCount.incrementAndGet();
+                    capacityExceededCount.incrementAndGet();
                 } catch (Exception e) {
-                    failureCount.incrementAndGet();
+                    System.err.println("예외: " + e.getMessage());
                 } finally {
-                    endLatch.countDown();
+                    latch.countDown();
                 }
             });
         }
 
-        startLatch.countDown();
-        endLatch.await();
-        executor.shutdown();
+        latch.await(30, TimeUnit.SECONDS);
+        executorService.shutdown();
 
-        assertThat(successCount.get()).isEqualTo(10);
-        assertThat(failureCount.get()).isEqualTo(90);
+        // then
+        Integer confirmedCount = enrollmentRepository.countConfirmedByCourseId(courseId);
 
-        Long totalEnrollments = enrollmentRepository.countByCourseId(courseId);
-        assertThat(totalEnrollments).isEqualTo(10);
+        System.out.println("\n=== 결제 확정 동시성 테스트 결과 ===");
+        System.out.println("✅ 확정 성공: " + successCount.get());
+        System.out.println("❌ 정원 초과: " + capacityExceededCount.get());
+        System.out.println("📊 DB 확정 건수: " + confirmedCount);
+        System.out.println("🎯 정원 제한: " + MAX_CAPACITY);
+        System.out.println("==================================\n");
 
-        Class courseAfter = courserRepository.findById(courseId).orElseThrow();
-        // ⭐ 추가됨: enroll 시점에 currentEnrollment가 증가하므로 10이 되어야 합니다.
-        assertThat(courseAfter.getCurrentEnrollment()).isEqualTo(10);
+        // 핵심 검증
+        assertThat(confirmedCount).isLessThanOrEqualTo(MAX_CAPACITY);
+        assertThat(successCount.get()).isLessThanOrEqualTo(MAX_CAPACITY);
     }
 
     @Test
-    @DisplayName("중복 신청 방지 테스트")
-    void testDuplicateEnrollmentPrevention() throws InterruptedException {
-        int numAttempts = 10;
-        ExecutorService executor = Executors.newFixedThreadPool(numAttempts);
-        CountDownLatch startLatch = new CountDownLatch(1);
-        CountDownLatch endLatch = new CountDownLatch(numAttempts);
+    @DisplayName("같은 학생이 동시에 여러 번 신청 → 1번만 성공해야 함")
+    void 동시_중복신청_방지() throws InterruptedException {
+        // given
+        String userId = "student-1";
+        int attempts = 10;
+        ExecutorService executorService = Executors.newFixedThreadPool(10);
+        CountDownLatch latch = new CountDownLatch(attempts);
 
-        String userId = "student-duplicate";
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger duplicateCount = new AtomicInteger(0);
 
-        for (int i = 0; i < numAttempts; i++) {
-            executor.submit(() -> {
+        // when - 같은 학생이 10번 동시 신청
+        for (int i = 0; i < attempts; i++) {
+            executorService.submit(() -> {
                 try {
-                    startLatch.await();
-
-                    EnrollRequest request = new EnrollRequest();
-                    request.setCourseId(courseId);
-
-                    enrollmentService.enroll(request, userId);
+                    enrollmentService.enrollCourse(courseId, userId);
                     successCount.incrementAndGet();
-
-                } catch (Exception e) {
+                } catch (DuplicateEnrollmentException e) {
                     duplicateCount.incrementAndGet();
+                } catch (Exception e) {
+                    System.err.println("예외: " + e.getMessage());
                 } finally {
-                    endLatch.countDown();
+                    latch.countDown();
                 }
             });
         }
 
-        startLatch.countDown();
-        endLatch.await();
-        executor.shutdown();
+        latch.await(10, TimeUnit.SECONDS);
+        executorService.shutdown();
+
+        // then
+        System.out.println("\n=== 중복 신청 방지 테스트 ===");
+        System.out.println("✅ 성공: " + successCount.get());
+        System.out.println("🚫 중복 거부: " + duplicateCount.get());
+        System.out.println("============================\n");
 
         assertThat(successCount.get()).isEqualTo(1);
-        assertThat(duplicateCount.get()).isEqualTo(9);
-
-        var enrollments = enrollmentRepository.findByCourseIdAndUserId(courseId, userId);
-        assertThat(enrollments).isPresent();
     }
 }

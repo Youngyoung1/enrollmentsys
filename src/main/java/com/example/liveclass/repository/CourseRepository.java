@@ -11,6 +11,9 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import jakarta.persistence.LockModeType;
+
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -36,4 +39,6 @@ public interface CourseRepository extends JpaRepository<Course, String> {
      * 강사별 강의 조회 (페이지네이션)
      */
     Page<Course> findByCreatorId(String creatorId, Pageable pageable);
+
+    List<Course> findByStatusAndStartDateBefore(CourseStatus courseStatus, LocalDateTime now);
 }

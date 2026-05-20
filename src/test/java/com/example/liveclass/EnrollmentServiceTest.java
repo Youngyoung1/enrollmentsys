@@ -1,12 +1,16 @@
 package com.example.liveclass;
 
-import com.example.liveclass.dto.request.EnrollRequest;
-import com.example.liveclass.entity.CourseStatus;
+import com.example.liveclass.dto.response.EnrollmentResponse;
+import com.example.liveclass.entity.Course;
+import com.example.liveclass.entity.Course.CourseStatus;
 import com.example.liveclass.entity.Enrollment;
 import com.example.liveclass.entity.EnrollmentStatus;
+import com.example.liveclass.entity.User;
 import com.example.liveclass.exception.*;
-import com.example.liveclass.repository.CourserRepository;
+import com.example.liveclass.repository.CourseRepository;
 import com.example.liveclass.repository.EnrollmentRepository;
+import com.example.liveclass.repository.UserRepository;
+import com.example.liveclass.service.EnrollmentService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,20 +25,24 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 /**
- * 신청 서비스 유닛 테스트
+ * EnrollmentService 유닛 테스트
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("EnrollmentService 테스트")
-public class EnrollmentServiceTest {
+class EnrollmentServiceTest {
 
     @Mock
-    private CourserRepository courserRepository;
+    private CourseRepository courseRepository;
 
     @Mock
     private EnrollmentRepository enrollmentRepository;
+
+    @Mock
+    private UserRepository userRepository;
 
     @InjectMocks
     private EnrollmentService enrollmentService;
@@ -42,8 +50,9 @@ public class EnrollmentServiceTest {
     private String courseId;
     private String userId;
     private String enrollmentId;
-    private Class mockCourse;
+    private Course mockCourse;
     private Enrollment mockEnrollment;
+    private User mockUser;
 
     @BeforeEach
     void setUp() {
@@ -51,10 +60,18 @@ public class EnrollmentServiceTest {
         userId = "student-1";
         enrollmentId = UUID.randomUUID().toString();
 
-        // Mock 강의 설정
-        mockCourse = Class.builder()
+        // Mock User (학생)
+        mockUser = User.builder()
+                .id(userId)
+                .name("학생1")
+                .email("student1@test.com")
+                .role(User.UserRole.STUDENT)
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        // Mock 강의
+        mockCourse = Course.builder()
                 .id(courseId)
-                .creatorId("creator-1")
                 .title("테스트 강의")
                 .description("테스트")
                 .price(50000)
@@ -63,14 +80,19 @@ public class EnrollmentServiceTest {
                 .status(CourseStatus.OPEN)
                 .startDate(LocalDateTime.now().plusDays(1))
                 .endDate(LocalDateTime.now().plusDays(30))
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
                 .build();
 
-        // Mock 신청 설정
+        // Mock 신청
         mockEnrollment = Enrollment.builder()
                 .id(enrollmentId)
                 .courseId(courseId)
                 .userId(userId)
                 .status(EnrollmentStatus.PENDING)
+                .enrolledAt(LocalDateTime.now())
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
                 .build();
     }
 
@@ -78,26 +100,23 @@ public class EnrollmentServiceTest {
     @DisplayName("정상 신청 - 성공")
     void testEnrollSuccess() {
         // Given
-        EnrollRequest request = new EnrollRequest();
-        request.setCourseId(courseId);
-
-        when(courserRepository.findByIdWithLock(courseId))
-                .thenReturn(Optional.of(mockCourse));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(mockUser));
+        when(courseRepository.findById(courseId)).thenReturn(Optional.of(mockCourse));
+        when(enrollmentRepository.countConfirmedByCourseId(courseId)).thenReturn(0);
         when(enrollmentRepository.findByCourseIdAndUserId(courseId, userId))
                 .thenReturn(Optional.empty());
-        when(enrollmentRepository.save(any(Enrollment.class)))
-                .thenReturn(mockEnrollment);
+        when(enrollmentRepository.save(any(Enrollment.class))).thenReturn(mockEnrollment);
 
         // When
-        EnrollmentResponse response = enrollmentService.enroll(request, userId);
+        EnrollmentResponse response = enrollmentService.enrollCourse(courseId, userId);
 
         // Then
         assertThat(response).isNotNull();
-        assertThat(response.getId()).isEqualTo(enrollmentId);
-        assertThat(response.getStatus()).isEqualTo(EnrollmentStatus.PENDING);
+        assertThat(response.getEnrollmentId()).isEqualTo(enrollmentId);
+        assertThat(response.getStatus()).isEqualTo(EnrollmentStatus.PENDING.toString());
         assertThat(response.getUserId()).isEqualTo(userId);
 
-        verify(courserRepository, times(1)).findByIdWithLock(courseId);
+        verify(courseRepository, times(1)).findById(courseId);
         verify(enrollmentRepository, times(1)).save(any(Enrollment.class));
     }
 
@@ -105,32 +124,26 @@ public class EnrollmentServiceTest {
     @DisplayName("강의 미존재 - 실패")
     void testEnrollFailedCourseNotFound() {
         // Given
-        EnrollRequest request = new EnrollRequest();
-        request.setCourseId(courseId);
-
-        when(courserRepository.findByIdWithLock(courseId))
-                .thenReturn(Optional.empty());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(mockUser));
+        when(courseRepository.findById(courseId)).thenReturn(Optional.empty());
 
         // When, Then
-        assertThatThrownBy(() -> enrollmentService.enroll(request, userId))
+        assertThatThrownBy(() -> enrollmentService.enrollCourse(courseId, userId))
                 .isInstanceOf(CourseNotFoundException.class);
 
-        verify(courserRepository, times(1)).findByIdWithLock(courseId);
+        verify(courseRepository, times(1)).findById(courseId);
     }
 
     @Test
     @DisplayName("강의 상태가 OPEN이 아님 - 실패")
     void testEnrollFailedCourseNotOpen() {
         // Given
-        EnrollRequest request = new EnrollRequest();
-        request.setCourseId(courseId);
-
         mockCourse.setStatus(CourseStatus.DRAFT);
-        when(courserRepository.findByIdWithLock(courseId))
-                .thenReturn(Optional.of(mockCourse));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(mockUser));
+        when(courseRepository.findById(courseId)).thenReturn(Optional.of(mockCourse));
 
         // When, Then
-        assertThatThrownBy(() -> enrollmentService.enroll(request, userId))
+        assertThatThrownBy(() -> enrollmentService.enrollCourse(courseId, userId))
                 .isInstanceOf(CourseNotOpenException.class);
     }
 
@@ -138,15 +151,13 @@ public class EnrollmentServiceTest {
     @DisplayName("정원 초과 - 실패")
     void testEnrollFailedCapacityExceeded() {
         // Given
-        EnrollRequest request = new EnrollRequest();
-        request.setCourseId(courseId);
-
-        mockCourse.setCurrentEnrollment(mockCourse.getMaxCapacity());
-        when(courserRepository.findByIdWithLock(courseId))
-                .thenReturn(Optional.of(mockCourse));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(mockUser));
+        when(courseRepository.findById(courseId)).thenReturn(Optional.of(mockCourse));
+        when(enrollmentRepository.countConfirmedByCourseId(courseId))
+                .thenReturn(mockCourse.getMaxCapacity());
 
         // When, Then
-        assertThatThrownBy(() -> enrollmentService.enroll(request, userId))
+        assertThatThrownBy(() -> enrollmentService.enrollCourse(courseId, userId))
                 .isInstanceOf(CapacityExceededException.class);
     }
 
@@ -154,16 +165,14 @@ public class EnrollmentServiceTest {
     @DisplayName("중복 신청 - 실패")
     void testEnrollFailedDuplicate() {
         // Given
-        EnrollRequest request = new EnrollRequest();
-        request.setCourseId(courseId);
-
-        when(courserRepository.findByIdWithLock(courseId))
-                .thenReturn(Optional.of(mockCourse));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(mockUser));
+        when(courseRepository.findById(courseId)).thenReturn(Optional.of(mockCourse));
+        when(enrollmentRepository.countConfirmedByCourseId(courseId)).thenReturn(0);
         when(enrollmentRepository.findByCourseIdAndUserId(courseId, userId))
                 .thenReturn(Optional.of(mockEnrollment));
 
         // When, Then
-        assertThatThrownBy(() -> enrollmentService.enroll(request, userId))
+        assertThatThrownBy(() -> enrollmentService.enrollCourse(courseId, userId))
                 .isInstanceOf(DuplicateEnrollmentException.class);
     }
 
@@ -171,29 +180,30 @@ public class EnrollmentServiceTest {
     @DisplayName("결제 확정 - 성공")
     void testConfirmPaymentSuccess() {
         // Given
-        when(enrollmentRepository.findById(enrollmentId))
+        when(userRepository.findById(userId)).thenReturn(Optional.of(mockUser));
+        when(enrollmentRepository.findByIdWithLock(enrollmentId))
                 .thenReturn(Optional.of(mockEnrollment));
-        when(courserRepository.findByIdWithLock(courseId))
-                .thenReturn(Optional.of(mockCourse));
-        when(enrollmentRepository.save(any(Enrollment.class)))
-                .thenReturn(mockEnrollment);
+        when(courseRepository.findById(courseId)).thenReturn(Optional.of(mockCourse));
+        when(enrollmentRepository.countConfirmedByCourseId(courseId)).thenReturn(0);
+        when(enrollmentRepository.save(any(Enrollment.class))).thenReturn(mockEnrollment);
 
         // When
         EnrollmentResponse response = enrollmentService.confirmPayment(enrollmentId, userId);
 
         // Then
         assertThat(response).isNotNull();
-        assertThat(response.getId()).isEqualTo(enrollmentId);
+        assertThat(response.getEnrollmentId()).isEqualTo(enrollmentId);
 
-        verify(enrollmentRepository, times(2)).findById(enrollmentId);
-        verify(courserRepository, times(1)).findByIdWithLock(courseId);
+        verify(enrollmentRepository, times(1)).findByIdWithLock(enrollmentId);
+        verify(enrollmentRepository, times(1)).save(any(Enrollment.class));
     }
 
     @Test
     @DisplayName("결제 확정 - 신청 미존재")
     void testConfirmPaymentEnrollmentNotFound() {
         // Given
-        when(enrollmentRepository.findById(enrollmentId))
+        when(userRepository.findById(userId)).thenReturn(Optional.of(mockUser));
+        when(enrollmentRepository.findByIdWithLock(enrollmentId))
                 .thenReturn(Optional.empty());
 
         // When, Then
@@ -202,21 +212,21 @@ public class EnrollmentServiceTest {
     }
 
     @Test
-    @DisplayName("신청 취소 - 성공")
+    @DisplayName("신청 취소 - 성공 (PENDING 상태)")
     void testCancelEnrollmentSuccess() {
         // Given
         mockEnrollment.setStatus(EnrollmentStatus.PENDING);
-        when(enrollmentRepository.findById(enrollmentId))
+        when(userRepository.findById(userId)).thenReturn(Optional.of(mockUser));
+        when(enrollmentRepository.findByIdWithLock(enrollmentId))
                 .thenReturn(Optional.of(mockEnrollment));
-        when(enrollmentRepository.save(any(Enrollment.class)))
-                .thenReturn(mockEnrollment);
+        when(enrollmentRepository.save(any(Enrollment.class))).thenReturn(mockEnrollment);
 
         // When
         EnrollmentResponse response = enrollmentService.cancelEnrollment(enrollmentId, userId);
 
         // Then
         assertThat(response).isNotNull();
-        verify(enrollmentRepository, times(1)).findById(enrollmentId);
+        verify(enrollmentRepository, times(1)).findByIdWithLock(enrollmentId);
         verify(enrollmentRepository, times(1)).save(any(Enrollment.class));
     }
 
@@ -225,11 +235,33 @@ public class EnrollmentServiceTest {
     void testCancelEnrollmentAlreadyCancelled() {
         // Given
         mockEnrollment.setStatus(EnrollmentStatus.CANCELLED);
-        when(enrollmentRepository.findById(enrollmentId))
+        when(userRepository.findById(userId)).thenReturn(Optional.of(mockUser));
+        when(enrollmentRepository.findByIdWithLock(enrollmentId))
                 .thenReturn(Optional.of(mockEnrollment));
 
         // When, Then
         assertThatThrownBy(() -> enrollmentService.cancelEnrollment(enrollmentId, userId))
                 .isInstanceOf(InvalidStateException.class);
+    }
+
+    @Test
+    @DisplayName("권한 없음 - 다른 사용자의 신청 취소")
+    void testCancelEnrollmentUnauthorized() {
+        // Given
+        String otherUserId = "student-999";
+        when(userRepository.findById(otherUserId)).thenReturn(Optional.of(
+                User.builder()
+                        .id(otherUserId)
+                        .name("다른학생")
+                        .role(User.UserRole.STUDENT)
+                        .createdAt(LocalDateTime.now())
+                        .build()
+        ));
+        when(enrollmentRepository.findByIdWithLock(enrollmentId))
+                .thenReturn(Optional.of(mockEnrollment));
+
+        // When, Then
+        assertThatThrownBy(() -> enrollmentService.cancelEnrollment(enrollmentId, otherUserId))
+                .isInstanceOf(UnauthorizedException.class);
     }
 }
