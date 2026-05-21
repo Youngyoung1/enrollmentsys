@@ -153,8 +153,8 @@ https://enrollmentsys-production.up.railway.app/swagger-ui/index.html#/
 | Exception | 80% | 20% |
 | Config (Swagger, Security) | 90% | 10% |
 | Test 코드 | 50% | 50% |
-| 문서화 | 90% | 10% |
-| **평균** | **56%** | **44%** |
+| 문서화 | 80% | 20% |
+| **평균** | **40%** | **60%** |
 
 ### AI 미사용 부분
 
