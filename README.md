@@ -364,7 +364,8 @@ GET /api/enrollments/course/{courseId}?page=0&size=20
 
 ## 📊 데이터 모델 설명
 
-<img width="1120" height="1012" alt="1" src="https://github.com/user-attachments/assets/df54eb1a-f650-4373-8308-e565db12814c" />
+<img width="847" height="765" alt="image" src="https://github.com/user-attachments/assets/17157459-4de0-41c4-bbc2-1011bbbbf92e" />
+
 
 
 ## 🧪 테스트 실행 방법
